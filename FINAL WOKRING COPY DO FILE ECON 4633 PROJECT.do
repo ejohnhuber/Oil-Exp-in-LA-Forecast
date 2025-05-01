@@ -1,0 +1,63 @@
+clear all
+* Import data
+import excel "C:\Users\johnn\OneDrive\Desktop\Personal Consumption Expenditures Nondurable Goods Gasoline and Other Energy Goods for Louisiana.xlsx", ///
+    sheet("Annual") firstrow
+
+* Format the date variable as a Stata date
+format date %td
+gen t=mofd(date)
+format t %tm
+
+* Now set time series as monthly data
+tsset t, monthly
+
+* graph the data
+tsline expenditure, name("energy_expenditure")
+
+* run the linear trend model
+regress expenditure t
+estat ic
+
+* forecast using the model
+predict expenditure_LT
+tsline expenditure_LT || tsline expenditure, name("LT_model")
+
+* Create squared time variable
+gen t2 = t^2
+
+* Regress expenditure on time and time squared
+regress expenditure t t2
+estat ic
+
+* Predict fitted values
+predict expenditure_quad
+
+* Graph actual vs. quadratic fitted trend
+tsline expenditure_quad || tsline expenditure, name("Quad_model", replace)
+
+* Drop 2008 and 2020 from the dataset
+gen year = year(dofm(t))
+drop if year == 2008 | year == 2020 | year == 2016
+
+* Estimate quadratic trend
+regress expenditure t t2
+predict expenditure_fit
+
+* Plot actual vs fitted trend
+tsline expenditure expenditure_fit, ///
+    legend(label(1 "Actual") label(2 "Fitted")) ///
+    name("Trend_no_2008_2020", replace)
+
+* Append 60 future months for 5 years of forecast
+tsappend, add(60)
+
+* Recalculate t2 for new observations
+replace t2 = t^2 if missing(t2)
+
+* Forecast using estimated model
+predict expenditure_forecast if missing(expenditure)
+
+* Plot historical + forecasted values
+tsline expenditure expenditure_forecast, ///
+    legend(label(1 "Actual") label(2 "Forecast")) ///
+    name("Forecast_5yr", replace)
